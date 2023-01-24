@@ -45,31 +45,30 @@ class _LoginViewState extends State<LoginView> {
             enableSuggestions: false,
             autocorrect: true,
             keyboardType: TextInputType.emailAddress,
-            decoration:
-                const InputDecoration(hintText: 'Enter your email here'),
+            decoration: const InputDecoration(hintText: 'Enter your email here'),
           ),
           TextField(
             controller: _password,
             obscureText: true,
             enableSuggestions: false,
             autocorrect: false,
-            decoration:
-                const InputDecoration(hintText: 'Enter your password here'),
+            decoration: const InputDecoration(hintText: 'Enter your password here'),
           ),
           TextButton(
             onPressed: () async {
               final email = _email.text;
               final password = _password.text;
               try {
-                final userCredential =
-                    await FirebaseAuth.instance.signInWithEmailAndPassword(
+                final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
                   email: email,
                   password: password,
                 );
-                Navigator.of(context).pushNamedAndRemoveUntil(
-                  homeRoute,
-                  (route) => false,
-                );
+                final user = FirebaseAuth.instance.currentUser;
+                if (user?.emailVerified == true) {
+                  Navigator.of(context).pushNamedAndRemoveUntil(homeRoute, (route) => false);
+                } else {
+                  Navigator.of(context).pushNamedAndRemoveUntil(verifyEmailRoute, (route) => false);
+                }
               } on FirebaseAuthException catch (e) {
                 if (e.code == 'user-not-found') {
                   await showErrorDialog(context, "User not found");
