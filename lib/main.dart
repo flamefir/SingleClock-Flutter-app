@@ -14,13 +14,14 @@ void main() {
     MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        primarySwatch: Colors.green,
       ),
       home: const PageController(),
       routes: {
         loginRoute: (context) => const LoginView(),
         registerRoute: (context) => const RegisterView(),
         homeRoute: (context) => const HomeView(),
+        verifyEmailRoute: (context) => const VerifyEmailView(),
       },
     ),
   );
