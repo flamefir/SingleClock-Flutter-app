@@ -1,5 +1,6 @@
 //CRUD file responsibility (create, read, update and delete)
 
+import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path_provider/path_provider.dart' show MissingPlatformDirectoryException, getApplicationDocumentsDirectory;
@@ -9,6 +10,36 @@ import 'crud_exceptions.dart';
 //notes service that connects to database and handles data
 class NotesService {
   Database? _db;
+  //Contains all notes
+  List<DatabaseNote> _notes = [];
+  //Controls the data and connects with UI
+  final _notesStreamController = StreamController<List<DatabaseNote>>.broadcast();
+  Stream<List<DatabaseNote>> get allNotes => _notesStreamController.stream;
+
+  //Making NotesService a singleton
+  NotesService._sharedInstance();
+  static final NotesService _shared = NotesService._sharedInstance();
+  factory NotesService() => _shared;
+
+  //To be called upon logging in, so that we have the current user ready in the UI
+  Future<DatabaseUser> getOrCreateUser({required String email}) async {
+    try {
+      final user = await getUser(email: email);
+      return user;
+    } on CouldNotFindUserException {
+      final createdUser = await createUser(email: email);
+      return createdUser;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> _cacheNotes() async {
+    final allNotes = await getAllNotes();
+    _notes = allNotes.toList();
+    _notesStreamController.add(_notes);
+  }
+
   Database _getDatabaseOrThrow() {
     final db = _db;
     if (db == null) {
@@ -18,30 +49,45 @@ class NotesService {
     }
   }
 
+  //Update note in db, and cached _notes and notesController
   Future<DatabaseNote> updateNote({required DatabaseNote note, required String text}) async {
+    await _ensureDatabaseIsOpen();
     final db = _getDatabaseOrThrow();
+
+    //make sure note exists
     await getNote(id: note.id);
 
+    //update DB
     final updatesCount = db.update(notesTable, {
       textColumn: text,
       isSynchedWithCloudColumn: 0,
     });
 
+    //check if updated, then remove old note with new updated note in cached _notes and updated notesController
+    //and return updated note
     if (updatesCount == 0) {
       throw CouldNotUpdateNoteException();
     } else {
-      return await getNote(id: note.id);
+      final updatedNote = await getNote(id: note.id);
+      _notes.removeWhere((note) => note.id == updatedNote.id);
+      _notes.add(updatedNote);
+      _notesStreamController.add(_notes);
+      return updatedNote;
     }
   }
 
   Future<Iterable<DatabaseNote>> getAllNotes() async {
+    await _ensureDatabaseIsOpen();
     final db = _getDatabaseOrThrow();
     final notes = await db.query(notesTable);
 
     return notes.map((noteRow) => DatabaseNote.fromRow(noteRow));
   }
 
+  //Read/query a note from db, and if it exists then we, update cached _notes by
+  //removing old note, with same id, and add new note and update notesController
   Future<DatabaseNote> getNote({required int id}) async {
+    await _ensureDatabaseIsOpen();
     final db = _getDatabaseOrThrow();
     final notes = await db.query(
       notesTable,
@@ -52,16 +98,28 @@ class NotesService {
     if (notes.isEmpty) {
       throw CouldNotFindNoteException();
     } else {
-      return DatabaseNote.fromRow(notes.first);
+      final note = DatabaseNote.fromRow(notes.first);
+      _notes.removeWhere((note) => note.id == id);
+      _notes.add(note);
+      _notesStreamController.add(_notes);
+      return note;
     }
   }
 
+  //Deletes all notes from db and from cached _notes list and update notesController
   Future<int> deleteAllNotes() async {
+    await _ensureDatabaseIsOpen();
     final db = _getDatabaseOrThrow();
-    return await db.delete(notesTable);
+    final numberOfDeletions = await db.delete(notesTable);
+    _notes = [];
+    _notesStreamController.add(_notes);
+
+    return numberOfDeletions;
   }
 
+  //Deletes a note from db and from cached _notes list and update notesController
   Future<void> deleteNote({required int id}) async {
+    await _ensureDatabaseIsOpen();
     final db = _getDatabaseOrThrow();
     final deletedCount = await db.delete(
       notesTable,
@@ -70,10 +128,15 @@ class NotesService {
     );
     if (deletedCount == 0) {
       throw CouldNotDeleteNoteException();
+    } else {
+      _notes.removeWhere((note) => note.id == id);
+      _notesStreamController.add(_notes);
     }
   }
 
+  //Create note, add to list of cached _notes and notesController and return it, requires a user
   Future<DatabaseNote> createNote({required DatabaseUser owner}) async {
+    await _ensureDatabaseIsOpen();
     final db = _getDatabaseOrThrow();
 
     //Make sure owner exists in the database with the correct id
@@ -96,10 +159,13 @@ class NotesService {
       isSynchedWithCloud: true,
     );
 
+    _notes.add(note);
+    _notesStreamController.add(_notes);
     return note;
   }
 
   Future<DatabaseUser> getUser({required String email}) async {
+    await _ensureDatabaseIsOpen();
     final db = _getDatabaseOrThrow();
     final results = await db.query(
       userTable,
@@ -115,6 +181,7 @@ class NotesService {
   }
 
   Future<DatabaseUser> createUser({required String email}) async {
+    await _ensureDatabaseIsOpen();
     final db = _getDatabaseOrThrow();
     final results = await db.query(
       userTable,
@@ -133,6 +200,7 @@ class NotesService {
   }
 
   Future<void> deleteUser({required String email}) async {
+    await _ensureDatabaseIsOpen();
     final db = _getDatabaseOrThrow();
     final deletedCount = await db.delete(
       userTable,
@@ -153,11 +221,21 @@ class NotesService {
       final dbPath = join(docsPath.path, dbName);
       final db = await openDatabase(dbPath);
       _db = db;
-      //create tables
+      //Create tables
       await db.execute(createUserTable);
       await db.execute(createNoteTable);
+      //Cache all the notes
+      await _cacheNotes();
     } on MissingPlatformDirectoryException {
       throw UnableToGetDocumentsDirectoryException();
+    }
+  }
+
+  Future<void> _ensureDatabaseIsOpen() async {
+    try {
+      await open();
+    } on DatabaseAlreadyOpenException {
+      //no nothing, because it is already open
     }
   }
 
