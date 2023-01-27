@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:path/path.dart';
 import 'package:single_clock_proj/constants/routes.dart';
 import 'package:single_clock_proj/services/auth/auth_services.dart';
-import 'package:single_clock_proj/views/home_view.dart';
+import 'package:single_clock_proj/views/notes/home_view.dart';
 import 'package:single_clock_proj/views/login_view.dart';
+import 'package:single_clock_proj/views/notes/new_note_view.dart';
 import 'package:single_clock_proj/views/register_view.dart';
 import 'package:single_clock_proj/views/verifyEmail_view.dart';
 
@@ -20,6 +22,7 @@ void main() {
         registerRoute: (context) => const RegisterView(),
         homeRoute: (context) => const HomeView(),
         verifyEmailRoute: (context) => const VerifyEmailView(),
+        newNoteRoute: (context) => const NewNoteView(),
       },
     ),
   );

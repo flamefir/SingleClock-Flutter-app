@@ -33,6 +33,12 @@ class _HomeViewState extends State<HomeView> {
       appBar: AppBar(
         title: const Text("Main UI"),
         actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.of(context).pushNamed(newNoteRoute);
+            },
+            icon: const Icon(Icons.add),
+          ),
           PopupMenuButton<MenuAction>(
             onSelected: (value) async {
               switch (value) {
